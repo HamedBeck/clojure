@@ -1,3 +1,4 @@
+
 (ns ts.core
   (:gen-class)
   (:require [clojure.java.io :as io]
@@ -45,8 +46,10 @@
 (defn init-trip
   "Generate the first random configuration"
   [csv-data]
-  (let [trip (remove #(= "Row-name" %) (ds/column-names csv-data))]
-    (zipmap (range 1 25) trip)))
+  (let [cities (remove #(= "Row-name" %) (ds/column-names csv-data))
+        trip (zipmap (range 1 (inc (count cities))) cities)]
+    #_(zipmap (range 1 25) trip)
+    (conj trip {(inc (count trip)) (val (first (sort trip)))})))
 
 
 (defn update-trip
@@ -64,13 +67,14 @@
   (let [p (first (sort s))]
     (nth (d-matrix (val p)) (key p))))
 
+;;;; does not calculate dist. from last city to start
 
 (defn objective
   " calculate the objective value"
   [trip d-matrix]
   (loop [energy []
          i 0]
-    (if (< i (- (count trip) 1))
+    (if (< i (- (count trip) 2))
         (recur (conj energy (pull-distance d-matrix (filter #(> (key %) i) trip)))
                (inc i))
         (/ (reduce + energy) 1000.0))))
@@ -83,12 +87,11 @@
   (let [cE (objective c csv-data)
         nE (objective n csv-data)
         delta (- nE cE)]
-      (cond (neg? delta)
-            c
-            (>  (Math/exp (/ (* delta -1) t)) (+ (rand 0.99) 0.01) )
-            n
-            :else
-            c)))
+    (cond
+      (pos? delta) n
+      (and (neg? delta)
+           (>  (Math/exp (/ (* delta -1) t)) (+ (rand 0.99) 0.01) )) n
+      :else c)))
 
 
 
@@ -96,16 +99,27 @@
   "..."
   [csv-data temp]
   (loop [best (init-trip csv-data)
+         E-list []
          i 0]
+    #_(println best)
     (if (< i (count temp))
-      (recur (acceptance best (update-trip best) (nth temp i))
-             (inc i)) best)))
+      (recur  (acceptance best (update-trip best) (nth temp i))
+              (conj E-list (objective best csv-data))
+              (inc i))  {:energy-list E-list :last-configuration best})))
+
+
+
 
 (defn runner
   [csv-data iniT finT rate]
   (let [temp (tempt iniT finT rate)]
+    (println "TEMP " (count temp))
     (metropolis csv-data temp)))
 
+
+
+
+#_(insp/inspect-table {:energy-list nest})
 
 
 
@@ -119,9 +133,14 @@
 
 
 
-
+#_(-> {:x (range 99)
+     :y (repeatedly 99 rand)}
+    tc/dataset
+    viz/data
+    (viz/type :line)
+    (viz/viz))
 
 (defn -main
   "I don't do a whole lot ... yet."
-  [& args]
-  (PRINTLN "HELLO, WORLD!"))
+  [&args]
+  (println "hello"))
